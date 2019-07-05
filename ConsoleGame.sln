@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.28307.168
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ConsoleGame", "ConsoleGame\ConsoleGame.vcxproj", "{B72C384A-F04B-44EB-9636-FD59E23AA2A8}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B72C384A-F04B-44EB-9636-FD59E23AA2A8}.Debug|x64.ActiveCfg = Debug|x64
+		{B72C384A-F04B-44EB-9636-FD59E23AA2A8}.Debug|x64.Build.0 = Debug|x64
+		{B72C384A-F04B-44EB-9636-FD59E23AA2A8}.Debug|x86.ActiveCfg = Debug|Win32
+		{B72C384A-F04B-44EB-9636-FD59E23AA2A8}.Debug|x86.Build.0 = Debug|Win32
+		{B72C384A-F04B-44EB-9636-FD59E23AA2A8}.Release|x64.ActiveCfg = Release|x64
+		{B72C384A-F04B-44EB-9636-FD59E23AA2A8}.Release|x64.Build.0 = Release|x64
+		{B72C384A-F04B-44EB-9636-FD59E23AA2A8}.Release|x86.ActiveCfg = Release|Win32
+		{B72C384A-F04B-44EB-9636-FD59E23AA2A8}.Release|x86.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {B29E54B4-C56B-4959-8982-EBB62AA75D4A}
+	EndGlobalSection
+EndGlobal
