@@ -8,7 +8,9 @@
 		D - rotate right
 
 */
-
+#ifndef UNICODE
+#define UNICODE
+#endif
 #include "pch.h"
 #include <iostream>
 #include <windows.h>
