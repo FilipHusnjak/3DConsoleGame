@@ -211,7 +211,6 @@ int main(void) {
 	float depthBuffer[screenWidth];
 
 	while (true) {
-		int a = 0;
 		// Calculate elapsed time
 		tp2 = std::chrono::system_clock::now();
 		std::chrono::duration<float> elapsedTime = tp2 - tp1;
@@ -242,7 +241,6 @@ int main(void) {
 		if (GetAsyncKeyState(VK_SPACE) & 1) {
 			bullet b{ playerX + eyeX, playerY + eyeY, eyeX, eyeY, false };
 			bullets.push_back(b);
-			a = 1;
 		}
 
 		float baseAngle = playerA + fov / 2;
