@@ -1,48 +1,59 @@
-// Bullet structure:
-//   - coordinate (x, y)
-//	 - direction (vx, vy)
-//	 - flag which determines whether bullet should be removed
-struct bullet {
-	float x;
-	float y;
-	float vx;
-	float vy;
-	bool remove;
-};
+#pragma once
 
-// Target structure:
-//   - coordinate (x, y)
-//	 - flag which determines whether target should be removed
-struct target {
-	float x;
-	float y;
-	bool remove;
-};
+#include "Bullet.h"
+#include "Target.h"
 
-struct object_vec {
+#define M_PI 3.141592
+
+static constexpr int screenWidth = 240;
+static constexpr int screenHeight = 80;
+
+static int mapWidth = 16;
+static int mapHeight = 16;
+
+// Player position (X, Y) and angle
+static float playerX = 9.0f;
+static float playerY = 7.0f;
+static float playerA = M_PI;
+
+// Field of view
+static float fov = M_PI / 4.0f;
+
+// Raytracing resolution
+static float res = 0.1f;
+
+// Max rendering depth
+static float dof = 20.0f;
+
+// Player speed
+static float playerSpeed = 4.0f;
+
+// Bullet speed
+static float bulletSpeed = 5.0f;
+
+// Boundary width
+static float bWidth = 0.99995f;
+
+static const float PRECISION = 0.09f;
+
+struct vector {
 	float vx;
 	float vy;
 	float angle;
 };
 
-static bool checkMapBoundary(float x, float y);
+bool checkMapBoundary(float x, float y);
 
-static bool checkCollision(float x, float y);
+bool findWallCollision(float x, float y);
 
-static bool findCollisions(const bullet& b);
+bool findTargetCollision(const Bullet& b);
 
-static bool moveBullet(bullet& b, float elapsed);
+vector getAngleFromPlayer(float x, float y);
 
-static object_vec getAngleFromPlayer(float x, float y);
+bool checkWallBoundary(float currX, float currY, float rayX, float rayY);
 
-static void drawBullet(bullet& b, float* depthBuffer, wchar_t* screen);
+short getWallShade(float dist);
 
-static void drawTarget(target& t, float* depthBuffer, wchar_t* screen);
+char getFloorShade(float dist);
 
-static bool checkWallBoundary(float currX, float currY, float rayX, float rayY);
-
-static short getWallShade(float dist);
-
-static char getFloorShade(float dist);
-
-static void movePlayer(float movX, float movY);
+void movePlayer(float movX, float movY);
