@@ -211,6 +211,7 @@ int main(void) {
 	float depthBuffer[screenWidth];
 
 	while (true) {
+		int a = 0;
 		// Calculate elapsed time
 		tp2 = std::chrono::system_clock::now();
 		std::chrono::duration<float> elapsedTime = tp2 - tp1;
@@ -224,7 +225,7 @@ int main(void) {
 		if (GetAsyncKeyState((unsigned short)'D') & 0x8000) {
 			playerA -= 0.75f * playerSpeed * elapsed;
 		}
-
+		playerA -= (int)(playerA / (2.0f * M_PI)) * 2.0f * M_PI;
 		float movX = cosf(playerA) * playerSpeed * elapsed;
 		float movY = -sinf(playerA) * playerSpeed * elapsed;
 		// Move player if needed
@@ -238,9 +239,10 @@ int main(void) {
 		float eyeX = cosf(playerA);
 		float eyeY = -sinf(playerA);
 		// Fire bullet
-		if (GetAsyncKeyState(VK_SPACE) & 0x80000000) {
+		if (GetAsyncKeyState(VK_SPACE) & 1) {
 			bullet b{ playerX + eyeX, playerY + eyeY, eyeX, eyeY, false };
-			bullets.push_front(b);
+			bullets.push_back(b);
+			a = 1;
 		}
 
 		float baseAngle = playerA + fov / 2;
@@ -293,7 +295,7 @@ int main(void) {
 		bullets.remove_if([](bullet& b) { return b.remove; });
 
 		// Display Stats
-		swprintf_s(screen, 40, L"X=%3.2f, Y=%3.2f, A=%3.2f FPS=%3.2f ", playerX, playerY, playerA, 1.0f / elapsed);
+		swprintf_s(screen, 40, L"X=%3.2f, Y=%3.2f, A=%3.2f FPS=%3.2f", playerX, playerY, playerA, 1.0f / elapsed);
 
 		// Draw map
 		for (int mx = 0; mx < mapWidth; mx++) {
