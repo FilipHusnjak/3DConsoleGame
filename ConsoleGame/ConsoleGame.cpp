@@ -6,6 +6,10 @@
 		S - move backward
 		A - rotate left
 		D - rotate right
+		SPACE - shoot
+
+	NOTE - in order to work properly console size has to be set
+		   to width = 120 and height = 40
 
 */
 #ifndef UNICODE
@@ -16,10 +20,14 @@
 #include <windows.h>
 #include <chrono>
 #include <vector>
+#include <list>
 #include <algorithm>
+#include "ConsoleGame.h"
 
-int screenWidth = 120;
-int screenHeight = 40;
+#define M_PI 3.141592
+
+constexpr int screenWidth = 120;
+constexpr int screenHeight = 40;
 
 int mapWidth = 16;
 int mapHeight = 16;
@@ -47,10 +55,10 @@ std::string map =
 // Player position (X, Y) and angle
 float playerX = 9.0f;
 float playerY = 9.0f;
-float playerA = 3.1415f / 2.0f;
+float playerA = M_PI / 2.0f;
 
 // Field of view
-float fov = 3.1415f / 4.0f;
+float fov = M_PI / 4.0f;
 
 // Raytracing resolution
 float res = 0.1f;
@@ -59,14 +67,29 @@ float res = 0.1f;
 float dof = 20.0f;
 
 // Player speed
-float speed = 5.0f;
+float playerSpeed = 4.0f;
+
+// Bullet speed
+float bulletSpeed = 5.0f;
 
 // Boundary width
 float bWidth = 0.99995f;
 
+// Bullet structure:
+//  - coordinate (x, y)
+//	- direction (vx, vy)
+//	- flag which determines whether bullet should be removed
+struct bullet {
+	float x;
+	float y;
+	float vx;
+	float vy;
+	bool remove;
+};
+
 // Checks if the given coordinate is legal
-static bool checkMapBoundary(float cord, float maxCord) {
-	return cord >= 0 && cord < maxCord;
+static bool checkMapBoundary(float x, float y) {
+	return x >= 0 && x < mapWidth && y >= 0 && y < mapHeight;
 }
 
 // Checks if the given point collides with wall
@@ -74,6 +97,54 @@ static bool checkCollision(float x, float y) {
 	return map[(int)y * mapWidth + (int)x] == '#';
 }
 
+// Moves the bullet in its direction
+static bool moveBullet(bullet& b, float elapsed) {
+	b.x += b.vx * bulletSpeed * elapsed;
+	b.y += b.vy * bulletSpeed * elapsed;
+	int cx = (int)b.x;
+	int cy = (int)b.y;
+	return !(b.remove = !checkMapBoundary(cx, cy) || checkCollision(cx, cy));
+}
+
+// Draws bullet on the screen
+static void drawBullet(bullet& b, float depthBuffer[], wchar_t screen[]) {
+	// Calculate vector from player to the bullet
+	float vx = b.x - playerX;
+	float vy = b.y - playerY;
+	// Calculate angle between player and bullet vector
+	float angle = playerA - (vy > 0 ? std::atan2(-vy, vx) + 2.0f * M_PI : std::atan2(-vy, vx));
+	if (angle < -M_PI) angle += 2.0f * M_PI;
+	else if (angle > M_PI) angle -= 2.0f * M_PI;
+	// If angle is out of field of view return
+	if (std::fabs(angle) > fov / 2.0f) return;
+	// Calculate distance from the bullet
+	float dist = std::sqrt(vx * vx + vy * vy);
+	// Calculate radius based on the given distance
+	float radius = screenHeight / (dist * 4);
+	// Calculate center x coordinate of the bullet
+	angle += fov / 2.0f;
+	int center = (int)(angle / fov * screenWidth + 0.5f);
+	// Calculate start and end positions for drawing
+	int startX = center - 2 * radius;
+	if (startX < 0) startX = 0;
+	int endX = center + 2 * radius;
+	if (endX > screenWidth) endX = screenWidth;
+	// Draw the bullet
+	for (int i = startX; i < endX; ++i) {
+		int offset = i - center;
+		float d = std::sqrt(radius * radius - offset * offset);
+		int startY = (int)((float)screenHeight / 2 - d);
+		if (startY < 0) startY = 0;
+		int endY = (int)((float)screenHeight / 2 + d);
+		if (endY > screenHeight) endY = screenHeight;
+		for (int j = startY; j < endY; ++j) {
+			if (depthBuffer[i] < dist) continue;
+			screen[j * screenWidth + i] = 176;
+		}
+	}
+}
+
+// Checks whether the given coordinate belongs to wall boundary
 static bool checkWallBoundary(float currX, float currY, float rayX, float rayY) {
 	for (int i = 0; i < 2; i++) {
 		for (float j = 0; j < 2; ++j) {
@@ -99,7 +170,7 @@ static bool checkWallBoundary(float currX, float currY, float rayX, float rayY) 
 	return false;
 }
 
-// Determines ASCII character based on the given distance
+// Determines ASCII character for wall based on the given distance
 static short getWallShade(float dist) {
 	if (dist <= dof / 4.0f) { return 0x2588; }
 	else if (dist < dof / 3.0f) { return 0x2593; }
@@ -108,10 +179,11 @@ static short getWallShade(float dist) {
 	return ' ';
 }
 
-static char getFloorShade(float s) {
-	if (s < 0.25) return '-';
-	else if (s < 0.5) return '.';
-	else if (s < 0.75) return 'x';
+// Determines ASCII character for floor based on the given distance
+static char getFloorShade(float dist) {
+	if (dist < 0.25) return '-';
+	else if (dist < 0.5) return '.';
+	else if (dist < 0.75) return 'x';
 	return '#';
 }
 
@@ -119,14 +191,13 @@ static char getFloorShade(float s) {
 static void movePlayer(float movX, float movY) {
 	playerX += movX;
 	playerY += movY;
-	if (!checkMapBoundary(playerX, mapWidth) || !checkMapBoundary(playerY, mapHeight)
-		|| checkCollision(playerX, playerY)) {
+	if (!checkMapBoundary(playerX, playerY) || checkCollision(playerX, playerY)) {
 		playerX -= movX;
 		playerY -= movY;
 	}
 }
 
-int main() {
+int main(void) {
 	// Get and initialize screen buffer
 	wchar_t *screen = new wchar_t[screenWidth * screenHeight];
 	HANDLE hConsole = CreateConsoleScreenBuffer(GENERIC_READ | GENERIC_WRITE, 0, NULL, CONSOLE_TEXTMODE_BUFFER, NULL);
@@ -135,6 +206,9 @@ int main() {
 
 	auto tp1 = std::chrono::system_clock::now();
 	auto tp2 = std::chrono::system_clock::now();
+
+	std::list<bullet> bullets;
+	float depthBuffer[screenWidth];
 
 	while (true) {
 		// Calculate elapsed time
@@ -145,20 +219,28 @@ int main() {
 
 		// Rotate player if needed
 		if (GetAsyncKeyState((unsigned short)'A') & 0x8000) {
-			playerA += 0.75f * speed * elapsed;
+			playerA += 0.75f * playerSpeed * elapsed;
 		}
 		if (GetAsyncKeyState((unsigned short)'D') & 0x8000) {
-			playerA -= 0.75f * speed * elapsed;
+			playerA -= 0.75f * playerSpeed * elapsed;
 		}
 
-		float movX = cosf(playerA) * speed * elapsed;
-		float movY = -sinf(playerA) * speed * elapsed;
+		float movX = cosf(playerA) * playerSpeed * elapsed;
+		float movY = -sinf(playerA) * playerSpeed * elapsed;
 		// Move player if needed
 		if (GetAsyncKeyState((unsigned short)'W') & 0x8000) {
 			movePlayer(movX, movY);
 		}
 		if (GetAsyncKeyState((unsigned short)'S') & 0x8000) {
 			movePlayer(-movX, -movY);
+		}
+
+		float eyeX = cosf(playerA);
+		float eyeY = -sinf(playerA);
+		// Fire bullet
+		if (GetAsyncKeyState(VK_SPACE) & 0x80000000) {
+			bullet b{ playerX + eyeX, playerY + eyeY, eyeX, eyeY, false };
+			bullets.push_front(b);
 		}
 
 		float baseAngle = playerA + fov / 2;
@@ -173,7 +255,7 @@ int main() {
 			for (dist = res; dist < dof; dist += res) {
 				int currX = (int)(playerX + rayX * dist);
 				int currY = (int)(playerY + rayY * dist);
-				if (!checkMapBoundary(currX, mapWidth) || !checkMapBoundary(currY, mapHeight)) {
+				if (!checkMapBoundary(currX, currY)) {
 					dist = dof;
 					break;
 				}
@@ -182,6 +264,7 @@ int main() {
 					break;
 				}
 			}
+			depthBuffer[x] = dist;
 			// Calculate ceiling and floor
 			float ceiling = (float)screenHeight / 2 - (float)screenHeight / dist;
 			float floor = screenHeight - ceiling;
@@ -200,6 +283,14 @@ int main() {
 				}
 			}
 		}
+		// Draw bullets
+		for (bullet &b : bullets) {
+			if (!moveBullet(b, elapsed)) continue;
+			drawBullet(b, depthBuffer, screen);
+		}
+
+		// Remove bullets that are out of bounds or that hit the wall
+		bullets.remove_if([](bullet& b) { return b.remove; });
 
 		// Display Stats
 		swprintf_s(screen, 40, L"X=%3.2f, Y=%3.2f, A=%3.2f FPS=%3.2f ", playerX, playerY, playerA, 1.0f / elapsed);
@@ -221,4 +312,5 @@ int main() {
 		screen[screenWidth * screenHeight - 1] = '\0';
 		WriteConsoleOutputCharacter(hConsole, screen, screenWidth * screenHeight, { 0, 0 }, &dwBytesWritten);
 	}
+
 }
