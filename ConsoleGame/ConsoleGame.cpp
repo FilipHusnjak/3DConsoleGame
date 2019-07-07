@@ -9,7 +9,7 @@
 		SPACE - shoot
 
 	NOTE - in order to work properly console size has to be set
-		   to width = 120 and height = 40
+		   to width = 240 and height = 80
 
 */
 #ifndef UNICODE
@@ -26,8 +26,8 @@
 
 #define M_PI 3.141592
 
-constexpr int screenWidth = 120;
-constexpr int screenHeight = 40;
+constexpr int screenWidth = 240;
+constexpr int screenHeight = 80;
 
 int mapWidth = 16;
 int mapHeight = 16;
@@ -51,11 +51,18 @@ std::string map =
 	"#..............#"
 	"################";
 
+std::list<bullet> bullets;
+
+std::list<target> targets = {
+	{6.0f, 7.0f, false},
+	{12.0f, 13.0f, false}
+};
+
 
 // Player position (X, Y) and angle
 float playerX = 9.0f;
-float playerY = 9.0f;
-float playerA = M_PI / 2.0f;
+float playerY = 7.0f;
+float playerA = M_PI;
 
 // Field of view
 float fov = M_PI / 4.0f;
@@ -75,17 +82,7 @@ float bulletSpeed = 5.0f;
 // Boundary width
 float bWidth = 0.99995f;
 
-// Bullet structure:
-//  - coordinate (x, y)
-//	- direction (vx, vy)
-//	- flag which determines whether bullet should be removed
-struct bullet {
-	float x;
-	float y;
-	float vx;
-	float vy;
-	bool remove;
-};
+const float PRECISION = 0.07f;
 
 // Checks if the given coordinate is legal
 static bool checkMapBoundary(float x, float y) {
@@ -97,33 +94,45 @@ static bool checkCollision(float x, float y) {
 	return map[(int)y * mapWidth + (int)x] == '#';
 }
 
+static bool findCollisions(const bullet& b) {
+	for (target& t : targets) {
+		if (std::abs(b.x - t.x) < PRECISION && std::abs(b.y - t.y) < PRECISION) return (t.remove = true);
+	}
+	return false;
+}
+
 // Moves the bullet in its direction
 static bool moveBullet(bullet& b, float elapsed) {
 	b.x += b.vx * bulletSpeed * elapsed;
 	b.y += b.vy * bulletSpeed * elapsed;
 	int cx = (int)b.x;
 	int cy = (int)b.y;
-	return !(b.remove = !checkMapBoundary(cx, cy) || checkCollision(cx, cy));
+	return !(b.remove = !checkMapBoundary(cx, cy) || findCollisions(b) || checkCollision(cx, cy));
 }
 
-// Draws bullet on the screen
-static void drawBullet(bullet& b, float depthBuffer[], wchar_t screen[]) {
+static object_vec getAngleFromPlayer(float x, float y) {
 	// Calculate vector from player to the bullet
-	float vx = b.x - playerX;
-	float vy = b.y - playerY;
+	float vx = x - playerX;
+	float vy = y - playerY;
 	// Calculate angle between player and bullet vector
 	float angle = playerA - (vy > 0 ? std::atan2(-vy, vx) + 2.0f * M_PI : std::atan2(-vy, vx));
 	if (angle < -M_PI) angle += 2.0f * M_PI;
 	else if (angle > M_PI) angle -= 2.0f * M_PI;
+	return object_vec{ vx, vy, angle };
+}
+
+// Draws bullet on the screen
+static void drawBullet(bullet& b, float* depthBuffer, wchar_t* screen) {
+	object_vec vec = getAngleFromPlayer(b.x, b.y);
 	// If angle is out of field of view return
-	if (std::fabs(angle) > fov / 2.0f) return;
+	if (std::fabs(vec.angle) > fov / 2.0f) return;
 	// Calculate distance from the bullet
-	float dist = std::sqrt(vx * vx + vy * vy);
+	float dist = std::sqrt(vec.vx * vec.vx + vec.vy * vec.vy);
 	// Calculate radius based on the given distance
 	float radius = screenHeight / (dist * 4);
 	// Calculate center x coordinate of the bullet
-	angle += fov / 2.0f;
-	int center = (int)(angle / fov * screenWidth + 0.5f);
+	vec.angle += fov / 2.0f;
+	int center = (int)(vec.angle / fov * screenWidth + 0.5f);
 	// Calculate start and end positions for drawing
 	int startX = center - 2 * radius;
 	if (startX < 0) startX = 0;
@@ -139,7 +148,32 @@ static void drawBullet(bullet& b, float depthBuffer[], wchar_t screen[]) {
 		if (endY > screenHeight) endY = screenHeight;
 		for (int j = startY; j < endY; ++j) {
 			if (depthBuffer[i] < dist) continue;
+			depthBuffer[i] = dist;
 			screen[j * screenWidth + i] = 176;
+		}
+	}
+}
+
+static void drawTarget(target& t, float* depthBuffer, wchar_t* screen) {
+	object_vec vec = getAngleFromPlayer(t.x, t.y);
+	if (std::fabs(vec.angle) > fov / 2.0f) return;
+	float dist = std::sqrt(vec.vx * vec.vx + vec.vy * vec.vy);
+	if (dist < 1) return;
+	vec.angle += fov / 2.0f;
+	int center = (int)(vec.angle / fov * screenWidth + 0.5f);
+	int startX = center - 1;
+	if (startX < 0) startX = 0;
+	int endX = center + 1;
+	if (endX > screenWidth) endX = screenWidth;
+	int startY = (int)((float)screenHeight / 2.0f - (float)screenHeight / (dist * 5));
+	if (startY < 0) startY = 0;
+	int endY = (int)((float)screenHeight / 2.0f + screenHeight / dist);
+	if (endY > screenHeight) endY = screenHeight;
+	for (int i = startX; i < endX; ++i) {
+		for (int j = startY; j < endY; ++j) {
+			if (depthBuffer[i] < dist) continue;
+			depthBuffer[i] = dist;
+			screen[j * screenWidth + i] = '|';
 		}
 	}
 }
@@ -207,7 +241,6 @@ int main(void) {
 	auto tp1 = std::chrono::system_clock::now();
 	auto tp2 = std::chrono::system_clock::now();
 
-	std::list<bullet> bullets;
 	float depthBuffer[screenWidth];
 
 	while (true) {
@@ -219,10 +252,10 @@ int main(void) {
 
 		// Rotate player if needed
 		if (GetAsyncKeyState((unsigned short)'A') & 0x8000) {
-			playerA += 0.75f * playerSpeed * elapsed;
+			playerA += 0.3f * playerSpeed * elapsed;
 		}
 		if (GetAsyncKeyState((unsigned short)'D') & 0x8000) {
-			playerA -= 0.75f * playerSpeed * elapsed;
+			playerA -= 0.3f * playerSpeed * elapsed;
 		}
 		playerA -= (int)(playerA / (2.0f * M_PI)) * 2.0f * M_PI;
 		float movX = cosf(playerA) * playerSpeed * elapsed;
@@ -276,21 +309,26 @@ int main(void) {
 					screen[y * screenWidth + x] = ' ';
 				} else if (y >= floor) {
 					float s = (y - (float)screenHeight / 2) / ((float)screenHeight / 2);
-					char fShade = getFloorShade(s);
-					screen[y * screenWidth + x] = fShade;
+					screen[y * screenWidth + x] = getFloorShade(s);
 				} else {
 					screen[y * screenWidth + x] = wShade;
 				}
 			}
 		}
+		
+		for (target& t : targets) {
+			drawTarget(t, depthBuffer, screen);
+		}
 		// Draw bullets
-		for (bullet &b : bullets) {
+		for (bullet& b : bullets) {
 			if (!moveBullet(b, elapsed)) continue;
 			drawBullet(b, depthBuffer, screen);
 		}
 
 		// Remove bullets that are out of bounds or that hit the wall
 		bullets.remove_if([](bullet& b) { return b.remove; });
+
+		targets.remove_if([](target& t) { return t.remove; });
 
 		// Display Stats
 		swprintf_s(screen, 40, L"X=%3.2f, Y=%3.2f, A=%3.2f FPS=%3.2f", playerX, playerY, playerA, 1.0f / elapsed);
